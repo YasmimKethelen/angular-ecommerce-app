@@ -1,43 +1,64 @@
-name: CI/CD - Build, Push e Deploy AWS
+name: CI/CD - Angular E-commerce Deploy AWS EC2 (K3s)
 
 on:
   push:
     branches:
-      - main
       - master
+  workflow_dispatch:
 
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
 
     steps:
-      - name: 🔹 Checkout do código
-        uses: actions/checkout@v4
+      # 1️⃣ Checkout do código
+      - name: Checkout repository
+        uses: actions/checkout@v3
 
-      - name: 🔹 Login no Docker Hub
-        run: |
-          echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u "${{ secrets.DOCKER_USERNAME }}" --password-stdin
-
-      - name: 🔹 Build das imagens
-        run: |
-          docker build -t yasmimkethelen/backend:latest ./backend
-          docker build -t yasmimkethelen/frontend:latest ./client
-
-
-      - name: 🔹 Push das imagens pro Docker Hub
-        run: |
-          docker push yasmimkethelen/backend:latest
-          docker push yasmimkethelen/frontend:latest
-
-      - name: 🔹 Conectar na instância EC2 e atualizar Kubernetes
-        uses: appleboy/ssh-action@v1.0.3
+      # 2️⃣ Login no Docker Hub
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
         with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ${{ secrets.EC2_USER }}
-          key: ${{ secrets.EC2_SSH_KEY }}
-          script: |
-            cd ~/angular-ecommerce-app/k8s
-            kubectl apply -k .
-            kubectl rollout restart deployment backend -n app-demo
-            kubectl rollout restart deployment frontend -n app-demo
-            kubectl get pods -n app-demo
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      # 3️⃣ Build e Push do Backend
+      - name: Build and push backend image
+        run: |
+          docker build -t pedrobrantis/backend:latest ./backend
+          docker push pedrobrantis/backend:latest
+
+      # 4️⃣ Build e Push do Frontend
+      - name: Build and push frontend image
+        run: |
+          docker build -t pedrobrantis/frontend:latest ./client
+          docker push pedrobrantis/frontend:latest
+
+      # 5️⃣ Instala kubectl
+      - name: Install kubectl
+        run: |
+          curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+          chmod +x kubectl
+          sudo mv kubectl /usr/local/bin/
+
+      # 6️⃣ Configura acesso ao cluster (K3s na EC2)
+      - name: Configure kubeconfig
+        run: |
+          mkdir -p ~/.kube
+          echo "${{ secrets.KUBECONFIG_CONTENT }}" > ~/.kube/config
+          chmod 600 ~/.kube/config
+
+      # 7️⃣ Testa conexão
+      - name: Check cluster
+        run: |
+          kubectl cluster-info
+          kubectl get nodes
+
+      # 8️⃣ Faz o deploy no Kubernetes
+      - name: Deploy updated images
+        run: |
+          kubectl set image deployment/backend app=pedrobrantis/backend:latest -n app-demo
+          kubectl set image deployment/frontend app=pedrobrantis/frontend:latest -n app-demo
+          kubectl rollout status deployment/backend -n app-demo
+          kubectl rollout status deployment/frontend -n app-demo
+          kubectl get pods -n app-demo
