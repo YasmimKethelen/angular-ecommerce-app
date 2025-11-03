@@ -1,9 +1,9 @@
-name: CI/CD - Angular E-commerce Deploy AWS EC2 (K3s)
+name: CI/CD Pipeline - Deploy AWS K3s
 
 on:
   push:
     branches:
-      - master
+      - main
   workflow_dispatch:
 
 jobs:
@@ -11,40 +11,53 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      # 1️⃣ Clonar o repositório
       - name: Checkout repository
         uses: actions/checkout@v3
 
-      - name: Login to Docker Hub
+      # 2️⃣ Logar no Docker Hub
+      - name: Log in to Docker Hub
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
+      # 3️⃣ Build e push da imagem do backend
       - name: Build and push backend image
         run: |
-          docker build -t yasmimkethelen/backend:latest ./backend
-          docker push yasmimkethelen/backend:latest
+          docker build -t ${{ secrets.DOCKER_USERNAME }}/backend:latest -f backend/Dockerfile ./backend
+          docker push ${{ secrets.DOCKER_USERNAME }}/backend:latest
 
+      # 4️⃣ Build e push da imagem do frontend
       - name: Build and push frontend image
         run: |
-          docker build -t yasmimkethelen/frontend:latest ./client
-          docker push yasmimkethelen/frontend:latest
+          docker build -t ${{ secrets.DOCKER_USERNAME }}/client:latest -f client/Dockerfile ./client
+          docker push ${{ secrets.DOCKER_USERNAME }}/client:latest
 
+      # 5️⃣ Instalar kubectl
       - name: Install kubectl
         run: |
           curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
           chmod +x kubectl
           sudo mv kubectl /usr/local/bin/
 
+      # 6️⃣ Configurar kubeconfig remoto
       - name: Configure kubeconfig
         run: |
           mkdir -p ~/.kube
           echo "${{ secrets.KUBECONFIG_CONTENT }}" > ~/.kube/config
           chmod 600 ~/.kube/config
 
-      - name: Deploy updated images
+      # 7️⃣ Validar acesso ao cluster
+      - name: Test cluster connection
         run: |
-          kubectl set image deployment/backend app=yasmimkethelen/backend:latest -n app-demo
-          kubectl set image deployment/frontend app=yasmimkethelen/frontend:latest -n app-demo
-          kubectl rollout status deployment/backend -n app-demo
-          kubectl rollout status deployment/frontend -n app-demo
+          kubectl cluster-info
+          kubectl get nodes
+
+      # 8️⃣ Fazer o deploy no cluster remoto
+      - name: Deploy to Kubernetes
+        run: |
+          kubectl apply -k ./k8s
+          kubectl rollout restart deployment backend -n app-demo
+          kubectl rollout restart deployment frontend -n app-demo
+          kubectl get pods -n app-demo
