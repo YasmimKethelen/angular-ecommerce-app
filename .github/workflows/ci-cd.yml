@@ -33,7 +33,7 @@ jobs:
           docker push ${{ secrets.DOCKER_USERNAME }}/frontend:latest
 
       # 🚀 Conectar via SSH na instância EC2 e aplicar o deploy
-            - name: Deploy to Kubernetes on EC2
+      - name: Deploy to Kubernetes on EC2
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.EC2_HOST }}
