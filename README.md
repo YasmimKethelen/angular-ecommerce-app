@@ -1,4 +1,4 @@
-# Kubernetes Manifests (Split) Ya
+# Kubernetes Manifests (Split) 
 
 ## Passos
 1. Edite os **TODOs** (imagens, host do ingress, senhas).
