@@ -1,55 +1,54 @@
-name: CI/CD Pipeline
+name: Etapas do build do sistema
 
 on:
   push:
-    branches:
-      - main
+    branches: ["main"]
   workflow_dispatch:
 
 jobs:
-  build-and-deploy:
+  build-and-deploy-ec2-instance:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v3
+      - name: Checkout Code
+        uses: actions/checkout@v4
 
-      - name: Log in to Docker Hub
+      # 🔐 Login no Docker Hub (não mais no GHCR)
+      - name: Login to Docker Hub
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
-      # Backend
-      - name: Build and push backend image
+      # 🏗️ Build e Push Backend
+      - name: Build and Push image Backend
         run: |
-          cd backend
-          docker build -t ${{ secrets.DOCKER_USERNAME }}/backend:latest .
+          docker build -t ${{ secrets.DOCKER_USERNAME }}/backend:latest -f ./backend/Dockerfile ./backend
           docker push ${{ secrets.DOCKER_USERNAME }}/backend:latest
 
-      # Frontend
-      - name: Build and push frontend image
+      # 🏗️ Build e Push Frontend
+      - name: Build and Push image Frontend
         run: |
-          cd frontend
-          docker build -t ${{ secrets.DOCKER_USERNAME }}/frontend:latest .
+          docker build -t ${{ secrets.DOCKER_USERNAME }}/frontend:latest -f ./frontend/Dockerfile ./frontend
           docker push ${{ secrets.DOCKER_USERNAME }}/frontend:latest
 
-      # Configurar acesso ao cluster
+      # 🧰 Instala kubectl
+      - name: Install kubectl
+        run: |
+          curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+          chmod +x kubectl
+          sudo mv kubectl /usr/local/bin/
+
+      # ⚙️ Configura kubeconfig
       - name: Configure Kubeconfig
         run: |
           mkdir -p ~/.kube
           echo "${{ secrets.KUBECONFIG_CONTENT }}" > ~/.kube/config
           chmod 600 ~/.kube/config
 
-      # Verificar conexão com cluster
-      - name: Debug cluster connection
-        run: |
-          kubectl cluster-info
-          kubectl get nodes
-
-      # Deploy no cluster
+      # 🚀 Deploy no Kubernetes
       - name: Deploy to Kubernetes
         run: |
-          kubectl apply -k ./k8s --validate=false
+          kubectl apply -k k8s/ --validate=false
           kubectl rollout status deployment/backend -n app-demo --timeout=120s
           kubectl rollout status deployment/frontend -n app-demo --timeout=120s
+          kubectl get pods -n app-demo
