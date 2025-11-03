@@ -32,25 +32,30 @@ jobs:
           docker build -t ${{ secrets.DOCKER_USERNAME }}/frontend:latest -f frontend/Dockerfile .
           docker push ${{ secrets.DOCKER_USERNAME }}/frontend:latest
 
-      # ⚙️ Configurar o kubeconfig (usando secret do cluster remoto)
-      - name: Configure kubectl access
-        run: |
-          echo "${{ secrets.KUBECONFIG_CONTENT }}" > kubeconfig.yaml
-          export KUBECONFIG=$(pwd)/kubeconfig.yaml
-          kubectl cluster-info
-          kubectl get nodes
+      # 🚀 Conectar via SSH na instância EC2 e aplicar o deploy
+      - name: Deploy to Kubernetes on EC2
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            echo "===> Criando kubeconfig remoto"
+            echo "${{ secrets.KUBECONFIG_CONTENT }}" > ~/k3s-remote.yaml
+            export KUBECONFIG=~/k3s-remote.yaml
 
-      # 🚀 Fazer deploy no cluster Kubernetes remoto
-      - name: Deploy to Kubernetes
-        run: |
-          export KUBECONFIG=$(pwd)/kubeconfig.yaml
-          kubectl apply -k ./k8s --validate=false
-          kubectl rollout status deployment/backend -n app-demo --timeout=120s
-          kubectl rollout status deployment/frontend -n app-demo --timeout=120s
+            echo "===> Validando conexão com o cluster"
+            kubectl cluster-info
+            kubectl get nodes
 
-      # 🧩 Verificação final
-      - name: Verify running pods
-        run: |
-          export KUBECONFIG=$(pwd)/kubeconfig.yaml
-          kubectl get pods -n app-demo
-          kubectl get svc -n app-demo
+            echo "===> Aplicando manifests"
+            cd ~/angular-ecommerce-app/k8s
+            kubectl apply -k . --validate=false
+
+            echo "===> Reiniciando deploys"
+            kubectl rollout restart deployment backend -n app-demo
+            kubectl rollout restart deployment frontend -n app-demo
+
+            echo "===> Verificando pods e serviços"
+            kubectl get pods -n app-demo
+            kubectl get svc -n app-demo
