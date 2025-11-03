@@ -1,5 +1,5 @@
 # Kubernetes Manifests (Split) 
- aa
+ Yasmim
 ## Passos
 1. Edite os **TODOs** (imagens, host do ingress, senhas).
 2. Aplique em ordem ou via Kustomize:
