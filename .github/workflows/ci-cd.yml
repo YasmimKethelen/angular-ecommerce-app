@@ -28,11 +28,11 @@ jobs:
           docker build -t ${{ secrets.DOCKER_USERNAME }}/backend:latest -f backend/Dockerfile ./backend
           docker push ${{ secrets.DOCKER_USERNAME }}/backend:latest
 
-      # 4️⃣ Build e push da imagem do frontend
-      - name: Build and push frontend image
+      - name: Build and push frontend image with commit SHA
         run: |
-          docker build -t ${{ secrets.DOCKER_USERNAME }}/client:latest -f client/Dockerfile ./client
-          docker push ${{ secrets.DOCKER_USERNAME }}/client:latest
+          IMAGE_TAG=${{ github.sha }}
+          docker build -t yasmimkethelen/frontend:${IMAGE_TAG} -f client/Dockerfile ./client
+          docker push yasmimkethelen/frontend:${IMAGE_TAG}
 
       # 5️⃣ Instalar kubectl
       - name: Install kubectl
